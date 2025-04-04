@@ -36,4 +36,4 @@ Real-Time Analytics: Display real-time statistics and analytics on profile views
 
 You can find the code for this project in my public GitHub repository:
 
-git clone https://github.com/sartik098/Personal Portfolio.git
+git clone https://github.com/sartik098/Personal-Portfolio.git
