@@ -32,9 +32,8 @@ Personalized Dashboards: Create dashboards that allow users and employers to vie
 Advanced Search & Filtering: Implement advanced filters and search options for employers to find candidates more easily.
 Real-Time Analytics: Display real-time statistics and analytics on profile views and resume downloads.
 
-## Installation
+## GitHub Repository
 
-### 1. Clone the Repository
-Clone this repository to your local machine using the following command:
-```bash
+You can find the code for this project in my public GitHub repository:
+
 git clone https://github.com/sartik098/Personal Portfolio.git
