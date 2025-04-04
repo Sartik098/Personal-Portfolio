@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Portfolio</title>
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsk2QMADFvz1tUTpUwmQBISqEOWP4TpNw",
+            authDomain: "personal-porfolio-eeb03.firebaseapp.com",
+            projectId: "personal-porfolio-eeb03",
+            storageBucket: "personal-porfolio-eeb03.firebasestorage.app",
+            messagingSenderId: "569281908450",
+            appId: "1:569281908450:web:db50f29590b5c71367d8bb",
+            measurementId: "G-Y06SXGYQYH"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // Function to register user
+        window.register = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                loadDashboard(userCredential.user);
+            } catch (error) {
+                alert(error.message);
+            }
+        };
+
+        // Function to log in user
+        window.login = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                loadDashboard(userCredential.user);
+            } catch (error) {
+                alert(error.message);
+            }
+        };
+
+        // Function to upload resume
+        window.uploadResume = async () => {
+            const file = document.getElementById('resume').files[0];
+            const user = auth.currentUser;
+            if (!file || !user) {
+                alert("No file selected or user not authenticated.");
+                return;
+            }
+
+            const storageRef = ref(storage, `resumes/${user.uid}-${file.name}`);
+
+            try {
+                console.log("Uploading file...");
+                await uploadBytes(storageRef, file);
+                console.log("Upload successful, getting download URL...");
+
+                const fileURL = await getDownloadURL(storageRef);
+                console.log("File URL:", fileURL);
+
+                // Store additional info (skills, experience, projects, contact info) in Firestore
+                const skills = document.getElementById('skills').value;
+                const experience = document.getElementById('experience').value;
+                const projects = document.getElementById('projects').value;
+                const contactInfo = document.getElementById('contact').value;
+
+                await addDoc(collection(db, "candidates"), {
+                    userId: user.uid,
+                    email: user.email,
+                    resumeUrl: fileURL,
+                    skills: skills.split(","),
+                    experience,
+                    projects,
+                    contactInfo,
+                    uploadedAt: new Date()
+                });
+
+                alert("Resume Uploaded Successfully");
+                loadResumes(user);
+            } catch (error) {
+                console.error("Upload error:", error);
+                alert(error.message);
+            }
+        };
+
+        // Function to submit additional data (skills, projects, experience)
+        window.submitResumeData = () => {
+            const skills = document.getElementById('skills').value;
+            const projects = document.getElementById('projects').value;
+            const experience = document.getElementById('experience').value;
+            const contactInfo = document.getElementById('contact').value;
+            const user = auth.currentUser;
+            if (!user) {
+                alert("You must be logged in.");
+                return;
+            }
+
+            // Store additional info in Firestore
+            addDoc(collection(db, "candidates"), {
+                userId: user.uid,
+                email: user.email,
+                skills: skills.split(","),
+                experience,
+                projects,
+                contactInfo,
+                uploadedAt: new Date()
+            });
+
+            // Update the "Your Resume Sections" with the data entered
+            document.getElementById('display-skills').innerText = skills;
+            document.getElementById('display-projects').innerText = projects;
+            document.getElementById('display-experience').innerText = experience;
+            document.getElementById('display-contact').innerText = contactInfo;
+
+            // Show success message
+            document.getElementById('submit-success').style.display = 'block';
+
+            // Delay before showing "Thank You" and logging out
+            setTimeout(() => {
+                document.getElementById('submit-success').style.display = 'none';
+                document.getElementById('thank-you-message').style.display = 'block';
+                setTimeout(logout, 2000);
+            }, 2000);
+        };
+        // Function to logout
+        window.logout = async () => {
+            await signOut(auth);
+            document.getElementById('auth').style.display = 'block';
+            document.getElementById('candidate-dashboard').style.display = 'none';
+            document.getElementById('employer-dashboard').style.display = 'none';
+            document.getElementById('thank-you-message').style.display = 'none';
+        };
+
+        // Load user dashboard
+        async function loadDashboard(user) {
+            document.getElementById('user-email').innerText = user.email;
+            document.getElementById('auth').style.display = 'none';
+            document.getElementById('candidate-dashboard').style.display = 'block';
+            loadResumes(user);
+        }
+
+        // Load uploaded resumes for candidate
+        async function loadResumes(user) {
+            const q = query(collection(db, "candidates"), where("userId", "==", user.uid));
+            const querySnapshot = await getDocs(q);
+
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                document.getElementById('display-skills').innerText = data.skills.join(", ");
+                document.getElementById('display-projects').innerText = data.projects;
+                document.getElementById('display-experience').innerText = data.experience;
+                document.getElementById('display-contact').innerText = data.contactInfo;
+            });
+        }
+
+        // Employer Search: Filter resumes by skills
+        async function filterResumes() {
+            const skillQuery = document.getElementById('search-skills').value.toLowerCase();
+            const q = query(collection(db, "candidates"), where("skills", "array-contains", skillQuery));
+            const querySnapshot = await getDocs(q);
+
+            const filteredResumes = document.getElementById('filtered-resumes');
+            filteredResumes.innerHTML = ''; // Clear previous results
+            querySnapshot.forEach(doc => {
+                const candidateData = doc.data();
+                const listItem = document.createElement('li');
+                listItem.innerHTML = 
+                    `<a href="${candidateData.resumeUrl}" target="_blank">${candidateData.email}</a><br>
+                    Skills: ${candidateData.skills.join(", ")}<br>
+                    Experience: ${candidateData.experience}<br>
+                    Contact: ${candidateData.contactInfo}`;
+                filteredResumes.appendChild(listItem);
+            });
+        }
+
+        // Check authentication state
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                loadDashboard(user);
+            } else {
+                document.getElementById('auth').style.display = 'block';
+                document.getElementById('candidate-dashboard').style.display = 'none';
+                document.getElementById('employer-dashboard').style.display = 'none'
+                document.getElementById('thank-you-message').style.display = 'none';
+            }
+        });
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Personal Portfolio</h1>
+    <div id="auth">
+        <h2>Login / Register</h2>
+        <input type="email" id="email" placeholder="Enter Email">
+        <input type="password" id="password" placeholder="Enter Password">
+        <button onclick="register()">Register</button>
+        <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Candidate Dashboard -->
+    <div id="candidate-dashboard" style="display:none;">
+        <h2>Welcome, <span id="user-email"></span></h2>
+        <h3>Upload Your Resume</h3>
+        <input type="file" id="resume">
+        <button onclick="uploadResume()">Upload Resume</button>
+
+        <h3>Provide Additional Information</h3>
+        <textarea id="skills" placeholder="Skills (comma separated)"></textarea>
+        <textarea id="projects" placeholder="Projects"></textarea>
+        <textarea id="experience" placeholder="Experience"></textarea>
+        <input type="text" id="contact" placeholder="Contact Info">
+        <button onclick="submitResumeData()">Submit Data</button>
+       
+         
+        <div id="submit-success" style="display:none;">
+            <h3>Submit Your Data Successfully</h3>
+        </div>
+
+        <div id="thank-you-message" style="display:none;">
+            <h3>Thank you for submitting your data!</h3>
+        </div>
+
+        <h3>Your Resume Sections</h3>
+        <div id="resume-sections">
+            <h4>Skills: <span id="display-skills"></span></h4>
+            <h4>Projects: <span id="display-projects"></span></h4>
+            <h4>Experience: <span id="display-experience"></span></h4>
+            <h4>Contact: <span id="display-contact"></span></h4>
+        </div>
+
+       
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Employer Dashboard -->
+    <div id="employer-dashboard" style="display:none;">
+        <h2>Search for Candidates</h2>
+        <input type="text" id="search-skills" placeholder="Search by Skills">
+        <button onclick="filterResumes()">Search</button>
+
+        <h3>Candidate Resumes</h3>
+        <ul id="filtered-resumes"></ul>
+    </div>
+</body>
+</html>
